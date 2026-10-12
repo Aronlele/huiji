@@ -6,6 +6,8 @@
 
 源码仓库：https://github.com/Aronlele/huiji 。当前应用版本为 0.4.4；新增首次打开的环境准备向导与已有环境复用，说话人分析沿用 0.4.2 的修复。
 
+产品展示页：https://aronlele.github.io/huiji/ 。网页源码位于 `docs/`，为无构建依赖的 HTML、CSS 与 JavaScript。GitHub Pages 使用 `main` 分支的 `/docs` 发布，提交该目录即可更新网站。下载入口指向测试版 Release；更新应用版本时同步更新网页中的版本和下载链接。
+
 ## 从源码构建
 
 要求 Apple Silicon Mac、macOS 26 或更新，以及 Xcode Command Line Tools。在已安装命令行工具的 Mac 上运行：
