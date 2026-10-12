@@ -10,6 +10,6 @@
 | pyannote segmentation 3.0 | 声音变化与重叠检测 | https://huggingface.co/pyannote/segmentation-3.0 | `Resources/SpeakerModels/segmentation-LICENSE`（MIT） |
 | Silero VAD | 停顿检测 | https://github.com/snakers4/silero-vad | `Resources/SpeakerModels/vad-LICENSE`（MIT） |
 
-Apple 系统框架由 macOS 提供。系统中文语音识别与可用的 Foundation Models 在本机运行。可选的 Ollama 和 Qwen3 需另行安装下载，不包含在本仓库；各组件及模型遵循其上游许可。
+Apple 系统框架由 macOS 提供。系统中文语音识别与可用的 Foundation Models 在本机运行。可选的 Ollama 与 Qwen3 不包含在本仓库或会记 DMG，可由应用内准备向导下载。Ollama 官方运行环境 0.40.3 来源：https://github.com/ollama/ollama/releases/tag/v0.40.3，许可证：https://github.com/ollama/ollama/blob/v0.40.3/LICENSE（MIT）。完整官方应用中的第三方许可文件随下载保留。Qwen3 模型来源：https://ollama.com/library/qwen3:4b-instruct；各组件及模型遵循其上游许可。
 
 真人会议验证使用 AliMeeting 官方公开数据集（https://www.openslr.org/119/，CC BY-SA 4.0），仅下载至本机评估；本仓库不重新分发录音、人工会议文本或声纹。合成测试中的文本由项目生成，语音测试资料未包含在仓库。

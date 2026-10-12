@@ -29,8 +29,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <key>CFBundleExecutable</key><string>MeetingTranscriber</string>
 <key>CFBundleIconFile</key><string>HuijiIcon</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>0.4.3</string>
-<key>CFBundleVersion</key><string>8</string>
+<key>CFBundleShortVersionString</key><string>0.4.4</string>
+<key>CFBundleVersion</key><string>9</string>
 <key>LSMinimumSystemVersion</key><string>26.0</string>
 <key>NSMicrophoneUsageDescription</key><string>会记需要麦克风声音，将你在会议中说的话转成中文文字。音频只在本机处理。</string>
 <key>NSAudioCaptureUsageDescription</key><string>会记需要电脑播放的声音，将 Zoom 等会议中的语音转成中文文字。音频只在本机处理。</string>

@@ -8,9 +8,11 @@ swiftc Sources/MeetingTranscriber/Transcript.swift Tests/MeetingTranscriberTests
 .build/checks/TranscriptTests
 swiftc Sources/MeetingTranscriber/Transcript.swift Sources/MeetingTranscriber/MeetingStore.swift Tests/MeetingTranscriberTests/MeetingStoreTests.swift -o .build/checks/MeetingStoreTests
 .build/checks/MeetingStoreTests
-swiftc -parse-as-library Sources/MeetingTranscriber/Transcript.swift Sources/MeetingTranscriber/MeetingStore.swift Sources/MeetingTranscriber/MeetingAudioArchive.swift Sources/MeetingTranscriber/LocalSpeakerDiarizer.swift Sources/MeetingTranscriber/SpeakerClustering.swift Sources/MeetingTranscriber/LocalMeetingAI.swift Sources/MeetingTranscriber/MeetingModel.swift Tests/MeetingTranscriberTests/MicrophoneSwitchTests.swift -o .build/checks/MicrophoneSwitchTests
+swiftc -parse-as-library Sources/MeetingTranscriber/Transcript.swift Sources/MeetingTranscriber/MeetingStore.swift Sources/MeetingTranscriber/MeetingAudioArchive.swift Sources/MeetingTranscriber/LocalSpeakerDiarizer.swift Sources/MeetingTranscriber/SpeakerClustering.swift Sources/MeetingTranscriber/LocalAIRuntime.swift Sources/MeetingTranscriber/LocalMeetingAI.swift Sources/MeetingTranscriber/MeetingModel.swift Tests/MeetingTranscriberTests/MicrophoneSwitchTests.swift -o .build/checks/MicrophoneSwitchTests
 .build/checks/MicrophoneSwitchTests
 swiftc Sources/MeetingTranscriber/Transcript.swift Sources/MeetingTranscriber/MeetingStore.swift Tests/MeetingTranscriberTests/SpeakerTests.swift -o .build/checks/SpeakerTests
 .build/checks/SpeakerTests
 swiftc Sources/MeetingTranscriber/Transcript.swift Sources/MeetingTranscriber/SpeakerClustering.swift Tests/MeetingTranscriberTests/SpeakerClusteringTests.swift -o .build/checks/SpeakerClusteringTests
 .build/checks/SpeakerClusteringTests
+swiftc -parse-as-library Sources/MeetingTranscriber/Transcript.swift Sources/MeetingTranscriber/MeetingStore.swift Sources/MeetingTranscriber/SpeechSession.swift Sources/MeetingTranscriber/LocalAIRuntime.swift Sources/MeetingTranscriber/LocalMeetingAI.swift Sources/MeetingTranscriber/EnvironmentSetup.swift Tests/MeetingTranscriberTests/EnvironmentSetupTests.swift -o .build/checks/EnvironmentSetupTests
+.build/checks/EnvironmentSetupTests
