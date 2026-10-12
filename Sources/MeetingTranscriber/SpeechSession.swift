@@ -11,11 +11,27 @@ enum ChineseModel {
         return SpeechTranscriber(locale: locale, preset: .timeIndexedProgressiveTranscription)
     }
 
-    static func prepare() async throws {
+    static func isInstalled() async throws -> Bool {
         let module = try await transcriber()
+        return await AssetInventory.status(forModules: [module]) == .installed
+    }
+
+    static func prepare(progress: @escaping (Double?) -> Void = { _ in }) async throws {
+        let module = try await transcriber()
+        if await AssetInventory.status(forModules: [module]) == .installed { return }
         if let request = try await AssetInventory.assetInstallationRequest(supporting: [module]) {
-            try await request.downloadAndInstall()
+            let updates = Task {
+                while !Task.isCancelled {
+                    progress(request.progress.totalUnitCount > 0 ? request.progress.fractionCompleted : nil)
+                    try? await Task.sleep(for: .milliseconds(300))
+                }
+            }
+            defer { updates.cancel() }
+            try await withTaskCancellationHandler {
+                try await request.downloadAndInstall()
+            } onCancel: { request.progress.cancel() }
         }
+        try Task.checkCancellation()
         guard await AssetInventory.status(forModules: [module]) == .installed else {
             throw MeetingError.message("中文模型尚未准备好，请联网后重试。会议音频不会用于模型下载。")
         }

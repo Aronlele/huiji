@@ -21,6 +21,7 @@ struct MeetingTranscriberApp {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = MeetingModel(preferences: .standard)
+    let environment = EnvironmentSetup()
     private var window: NSWindow?
     private var aboutWindow: NSWindow?
 
@@ -39,7 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                               styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         window.title = "会记"
         window.minSize = NSSize(width: 980, height: 520)
-        window.contentView = NSHostingView(rootView: MeetingView(model: model))
+        window.contentView = NSHostingView(rootView: MeetingView(model: model, environment: environment))
         window.center()
         window.makeKeyAndOrderFront(nil)
         self.window = window
@@ -48,6 +49,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let appMenu = NSMenu()
         let aboutItem = appMenu.addItem(withTitle: "关于会记", action: #selector(showAbout), keyEquivalent: "")
         aboutItem.target = self
+        let environmentItem = appMenu.addItem(withTitle: "模型与环境…", action: #selector(showEnvironment), keyEquivalent: ",")
+        environmentItem.target = self
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "退出会记", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         appItem.submenu = appMenu
@@ -61,7 +64,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(editItem)
         NSApplication.shared.mainMenu = menu
         NSApplication.shared.activate(ignoringOtherApps: true)
-        Task { await model.checkModel(); await model.checkAI() }
+        Task {
+            await model.checkModel()
+            await environment.check()
+            await model.checkAI()
+            if !environment.allReady, !UserDefaults.standard.bool(forKey: "environmentGuideShown") {
+                UserDefaults.standard.set(true, forKey: "environmentGuideShown")
+                environment.isPresented = true
+            }
+        }
+    }
+
+    @objc private func showEnvironment() {
+        guard !model.recording, !model.busy, !model.paused, !model.summaryGenerating, !model.speakersGenerating else { return }
+        environment.isPresented = true
+        Task { await environment.check() }
     }
 
     @objc private func showAbout() {
@@ -79,8 +96,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard model.selectedMeeting != nil || model.busy || model.summaryGenerating || model.speakersGenerating else { LocalMeetingAI.shared.shutdown(); return .terminateNow }
-        Task { await model.shutdown(); sender.reply(toApplicationShouldTerminate: true) }
+        environment.cancel()
+        Task { await environment.waitUntilFinished(); await model.shutdown(); sender.reply(toApplicationShouldTerminate: true) }
         return .terminateLater
     }
 
@@ -174,6 +191,7 @@ struct AboutView: View {
 
 struct MeetingView: View {
     @ObservedObject var model: MeetingModel
+    @ObservedObject var environment: EnvironmentSetup
     private var accent: Color { .teal }
 
     var body: some View {
@@ -210,6 +228,10 @@ struct MeetingView: View {
                 footer
             }
         }.background(Color(nsColor: .windowBackgroundColor))
+            .sheet(isPresented: $environment.isPresented) { EnvironmentView(setup: environment) }
+            .onChange(of: environment.isPresented) { _, presented in
+                if !presented { Task { await model.checkModel(); await model.checkAI() } }
+            }
     }
 
     private var library: some View {
@@ -269,6 +291,10 @@ struct MeetingView: View {
             Button("导入录音", systemImage: "square.and.arrow.down") { model.promptImport() }
                 .frame(maxWidth: .infinity).disabled(!model.canManage || !model.modelReady)
             Button("打开本机记录目录", systemImage: "folder") { model.showRecords() }.font(.caption)
+            Button("模型与环境", systemImage: "arrow.down.circle") {
+                environment.isPresented = true
+                Task { await environment.check() }
+            }.font(.caption).disabled(!model.canManage || model.paused)
             Label("内容仅在本机处理", systemImage: "lock.shield").font(.caption2).foregroundStyle(.secondary)
         }.padding(.horizontal, 16).padding(.bottom, 18).background(Color(nsColor: .controlBackgroundColor).opacity(0.45))
     }
@@ -328,7 +354,7 @@ struct MeetingView: View {
                 }
             }
             if !model.modelReady {
-                HStack { Text("首次使用需准备中文离线识别模型").font(.caption).foregroundStyle(.secondary); Button("准备中文模型") { Task { await model.prepareModel() } }.disabled(model.busy) }
+                HStack { Text("先准备中文离线识别模型").font(.caption).foregroundStyle(.secondary); Button("一键准备环境") { environment.isPresented = true; Task { await environment.check() } }.disabled(model.busy) }
             } else {
                 Text(model.useMicrophone ? "Zoom 静音不会关闭这里的麦克风；使用外放时建议关闭，避免重复转写。" : "麦克风已关闭，只记录电脑播放的声音。转写中也可随时开启。")
                     .font(.caption).foregroundStyle(.secondary)
@@ -518,6 +544,10 @@ struct MeetingView: View {
                 }
                 if let date = model.selectedMeeting?.summaryGeneratedAt {
                     Text("生成于 " + date.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.secondary)
+                }
+                if !environment.aiModel.ready {
+                    Button("一键准备本地 AI") { environment.isPresented = true; Task { await environment.check() } }
+                        .disabled(!model.canManage || model.paused)
                 }
                 Label("AI 可能遗漏或误解内容，请与原文核对。确认后的待办才会加入列表。", systemImage: "info.circle").font(.caption).foregroundStyle(.secondary)
                 if model.selectedMeeting?.summary != nil {
