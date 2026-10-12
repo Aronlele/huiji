@@ -1,0 +1,33 @@
+File-only CPU inference; no cloud service, account, Python runtime or microphone access.
+
+sherpa-onnx 1.13.8 (Apache-2.0):
+https://github.com/k2-fsa/sherpa-onnx/releases/tag/v1.13.8
+Runtime archive SHA256 f3e0cbd86cc3f38dad30c97921b40e9a8bcc6f2c943777eb76ad77176993e417
+Includes ONNX Runtime (MIT); licenses accompany the binaries.
+
+pyannote segmentation 3.0 (MIT, CNRS):
+https://github.com/k2-fsa/sherpa-onnx/releases/tag/speaker-segmentation-models
+https://huggingface.co/csukuangfj/sherpa-onnx-pyannote-segmentation-3-0/tree/9403a6902bb58e3d5ae8c7e77c3422de279db2e0
+model.onnx SHA256 220ad67ca923bef2fa91f2390c786097bf305bceb5e261d4af67b38e938e1079
+Official release and author's Hugging Face copy matched byte-for-byte.
+
+3D-Speaker ERes2NetV2 zh-cn 16k-common (~200k training speakers, Apache-2.0):
+https://github.com/k2-fsa/sherpa-onnx/releases/tag/speaker-recongition-models
+https://modelscope.cn/models/iic/speech_eres2netv2_sv_zh-cn_16k-common
+https://github.com/modelscope/3D-Speaker
+Official sherpa release asset 198893092, 71441526 bytes.
+Model SHA256 bf1a75b9930474cf3389ef415e6e5d38ca96fea4a3a00f7e301d080a58ee2239
+Model-specific Apache-2.0 declaration is retained in embedding-MODEL-CARD.md.
+
+Silero VAD (MIT):
+https://github.com/snakers4/silero-vad
+https://huggingface.co/csukuangfj/vad/tree/af4fcfc9b8305246b1fe2ebcaf248975673166f1
+Model SHA256 a35ebf52fd3ce5f1469b2a36158dba761bc47b973ea3382b3186ca15b1f5af28
+The ONNX copy is maintained by sherpa-onnx's author; revision is pinned.
+VAD supplies pauses; pyannote supplies speaker changes and detected overlaps.
+Whole-fragment embeddings use average-link cosine similarity 0.65; short
+fragments (<1.3s) do not create identities and require a similarity margin.
+Detected overlap remains unassigned. ASR text is not sent to this helper.
+
+The C API header is vendored from sherpa-onnx v1.13.8.
+Models and runtime versions are fixed by prepare-speaker-models.sh checksums.
