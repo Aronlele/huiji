@@ -1,0 +1,23 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>会记 · 听脑 AI 产品研究与改进方案</title><style>body{margin:0;background:#f5f7f8;color:#213330;font:16px/1.8 -apple-system,BlinkMacSystemFont,sans-serif}main{max-width:980px;margin:40px auto;padding:40px;background:white;border-radius:20px}h1,h2{line-height:1.4}h2{margin-top:36px}a{color:#097e73}table{border-collapse:collapse;width:100%;font-size:14px}th,td{border:1px solid #dce6e3;text-align:left;padding:14px;vertical-align:top}th{background:#edf7f4}.callout{background:#edf7f4;padding:20px;border-radius:12px}.muted{color:#63766f}@media(max-width:700px){main{margin:0;padding:22px;border-radius:0}table{font-size:12px}td,th{padding:8px}}</style><main>
+<p class="muted">产品研究 · 2026-10-13 · 会记下一版</p><h1>从保存会议，到用得上会议</h1>
+<p>用户确认本轮一起完善：录音回放与文字定位、会议原文问答、场景化纪要模板。会议音频和文字继续在本机处理；沿用原生 macOS 应用和现有本地 AI 环境。</p>
+<h2>一、已确认与未验证</h2><p>研究依据为听脑 AI 的<a href="https://itingnao.com/">官方网站</a>、<a href="https://itingnao.com/official">办公产品页</a>和<a href="https://apps.apple.com/cn/app/听脑ai-实时录音转文字总结助手/id6670379647">官方 App Store 介绍</a>。页面展示功能代表厂商声明，不等于本次实测；准确率、整理速度、方言覆盖和多人效果均未独立验证。公开 Web 首页可查看录音、上传、文件夹、回收站、知识库与 AI 助手入口；示例条目点击未进入完整会议详情，本次未登录或上传资料。
+本次不将其宣传数字作为会记验收指标，也不声称完整复刻。</p>
+<h2>二、功能解析与取舍</h2><table><tr><th>听脑展示的能力</th><th>会记源码确认的现状</th><th>产品判断</th></tr>
+<tr><td>实时录音转写、发言人、重点标记</td><td>中文离线转写；两路声音；会后分离、改名和纠正；星标</td><td>保留已有能力。本轮不更换识别或分离模型，效果不由竞品宣传推导。</td></tr>
+<tr><td>字音同步与录音回顾</td><td>已保存分路音频和段落时间；没有回放入口</td><td>优先补齐。点击段落回听，进度拖动、倍速、来源切换、播放段落高亮。</td></tr>
+<tr><td>基于录音的 AI 问答</td><td>只有纪要与待办提取</td><td>新增单场问答、原文依据、引用定位、取消、历史保存与导出。长资料逐段查阅，显示进度。</td></tr>
+<tr><td>场景模板、结构化总结</td><td>单一摘要格式</td><td>提供工作会议、项目评审、访谈沟通、课堂笔记四种可维护模板；共用事实校验和任务依据规则。</td></tr>
+<tr><td>脑图、章节、表格、发言观点</td><td>已有说话人段落与结构化待办</td><td>后续评估章节和观点提炼。本轮先实现能核对依据的使用链路，避免为了视觉堆功能。</td></tr>
+<tr><td>DOCX / PDF / SRT、多端同步、企业协作、在线链接解析、知识库</td><td>本地 TXT / Markdown / SRT，会议搜索与文件夹</td><td>保留离线资料导出。跨会议知识库需独立设计检索与更新；云端协作和在线平台解析不纳入当前离线范围。</td></tr>
+</table>
+<h2>三、使用流程</h2><p><b>记录：</b>创建空会议 → 按需开关麦克风 → 中文转写 → 标重点/写笔记 → 结束后分离和整理。</p><p><b>复盘：</b>搜索文字或查看重点 → 点击段落时间回听 → 纠正文字/姓名 → 按场景重新生成纪要 → 确认待办。</p><p><b>追问：</b>进入问答 → 选择常用问题或输入问题 → 本机逐段查阅 → 查看回答和引文 → 点击引文定位原文 → 保存/导出。</p>
+<h2>四、具体约束和验收</h2><ul>
+<li>暂停/继续录制产生的多个文件按会议时间定位；没有录音的间隔明确提示，不能播放错误来源。录制时禁止回放，暂停后可回听，继续录制前停止回放；开始录制、切换、删除和退出时停止播放器。</li>
+<li>旧会议缺少录音时保留原文；文件缺失提示原因，不删除资料。双路可独立回听，默认优先电脑声音。</li>
+<li>问答只以本场转写和笔记为材料，检查引用 ID 与逐字原文。无可核验引用时不保存肯定答案，显示材料中未找到明确答案。引用可核验不代表 AI 推理绝对正确，界面持续提示校对。</li>
+<li>长会议不只读取头部，按分组查阅全部材料。用户取消时不添加半条回答，不覆盖原纪要。问题最多 500 字。</li>
+<li>问答保存于所属会议；原文、笔记、姓名更新后提示重新核对。TXT 和 Markdown 导出包含问答、引用时间和姓名；SRT 保持只导出字幕。</li>
+<li>模板选择按会议保存。更换选择不覆盖旧纪要，重新生成才应用，并记录原生成模板。材料缺少的信息不补造；课堂内容不虚构作业。</li>
+<li>新增字段采用可选值兼容旧记录；复用已有 Ollama/Qwen3 或可用的系统本地 AI，不新增云端服务和模型下载。</li>
+</ul><h2>五、验证范围</h2><p>自动化验证覆盖旧资料兼容、问答与模板持久化/导出、伪造引文拒绝、长尾材料覆盖、分路回放与音频间隔、取消与会议隔离。真实本地 Qwen 使用合成中文会议材料验证有依据问题、无依据问题及模板输出；界面验收使用测试会议，不展示或上传个人会议。真实识别和多人分离准确率不属于此次新增功能验证。</p><div class="callout"><b>已完成验收：</b>本机 0.5.0（build 10）构建和签名验证通过；自动化回归通过。真实本地 Qwen 使用合成中文资料验证负责人/期限、未知手机号拒答、未决预算、长尾笔记任务及四种模板。实际原生界面验证段落回听高亮、进度定位、声音来源、倍速、引用跳转、模板切换保留原纪要、中文问题生成并保存。未完成独立真实会议准确率测评；该版发布与下载信息见 <a href="https://github.com/Aronlele/huiji/releases/tag/v0.5.0">GitHub Release</a>。</div><p class="muted">长期维护：不增加账号体系、服务器或新依赖；播放器负责本地文件生命周期，问答复用固定回环 AI 服务，模板使用有限枚举及提示词。原有转写和分离算法保持独立。</p></main></html>
