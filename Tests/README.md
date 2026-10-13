@@ -17,3 +17,15 @@
 `bash test.sh` 还执行 `EnvironmentSetupTests`，通过受控依赖验证全新环境、已有环境零下载、缺少单项、稍后补齐、断网重试、取消续作、安装前重检、坏安装包与服务错误；检查拒绝云模型、下载进度范围、SHA256 校验失败、磁盘空间不足。不会操作用户模型、下载大文件或访问会议。
 
 可选实际安装验证：`.build/checks/EnvironmentSetupTests --runtime-integration /path/to/Ollama-darwin.zip`，压缩包必须是代码固定的官方版本。它在临时目录安装、校验官方签名，并使用合成中文材料生成纪要，要求本机 Qwen3 已安装；同时报告系统中文识别状态，不下载系统识别模型。增加 `--download-runtime` 会实际下载官方运行环境；增加 `--fresh-models` 在临时模型目录下载约 2.5 GB 的模型，要求本机 11434 端口空闲。临时服务和下载内容在测试退出时清理，不覆盖用户已有运行环境和模型。这是在开发 Mac 的隔离目录验证，不代表所有新 Mac 上都经过测试。
+
+
+0.5.0 新增 `MeetingReviewTests.swift`（随 `test.sh`）：引用校验、长尾分组、模板/问答存储和旧 JSON 兼容、导出、取消/错误、实际本地 WAV 播放、分路/间隔/倍速/缺失音频。`MicrophoneSwitchTests.swift` 补充问答取消不追加、处理期禁切换和录制、会议隔离、引用定位及重启恢复。
+
+`MeetingLocalReviewTests.swift` 是可选真实本地模型集成测试，需要已经准备好的 Ollama/Qwen3 或可用系统本地 AI，仅使用合成中文资料，无个人会议：
+
+```bash
+swiftc -parse-as-library Sources/MeetingTranscriber/Transcript.swift Sources/MeetingTranscriber/MeetingIntelligence.swift Sources/MeetingTranscriber/MeetingStore.swift Sources/MeetingTranscriber/LocalAIRuntime.swift Sources/MeetingTranscriber/LocalMeetingAI.swift Tests/MeetingTranscriberTests/MeetingLocalReviewTests.swift -o .build/checks/MeetingLocalReviewTests
+.build/checks/MeetingLocalReviewTests
+```
+
+覆盖负责人/期限、未知手机号、未决预算、长笔记末尾任务和四种模板，结果写入忽略的 `verification/local-review-result.json`。这不是实际会议转写准确率或独立模型评测，AI 仍需校对。
