@@ -76,7 +76,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func showEnvironment() {
-        guard !model.recording, !model.busy, !model.paused, !model.summaryGenerating, !model.speakersGenerating else { return }
+        guard !model.recording, !model.busy, !model.paused, !model.summaryGenerating, !model.speakersGenerating, !model.questioning else { return }
         environment.isPresented = true
         Task { await environment.check() }
     }
@@ -208,11 +208,14 @@ struct MeetingView: View {
                         Divider()
                         tabs
                         Divider()
+                        MeetingPlaybackView(model: model, playback: model.playback)
+                        Divider()
                         Group {
                             switch model.tab {
                             case .transcript, .important: transcript
                             case .notes: notes
                             case .summary: summary
+                            case .questions: MeetingQuestionsView(model: model, environment: environment)
                             }
                         }.frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
@@ -310,7 +313,7 @@ struct MeetingView: View {
             }
             Spacer()
             if meeting.deletedAt == nil {
-                Button { model.toggleFavorite() } label: { Image(systemName: meeting.isFavorite == true ? "star.fill" : "star") }.help("收藏会议").disabled(model.summaryGenerating)
+                Button { model.toggleFavorite() } label: { Image(systemName: meeting.isFavorite == true ? "star.fill" : "star") }.help("收藏会议").disabled(model.summaryGenerating || model.questioning)
                 Menu {
                     ForEach(ExportKind.allCases, id: \.self) { kind in Button(kind.rawValue) { model.export(kind) } }
                     Divider(); Button("复制全部转写") { model.copyTranscript() }
@@ -401,12 +404,12 @@ struct MeetingView: View {
                                 Label("历史原始记录", systemImage: "doc.text").font(.caption).foregroundStyle(.secondary)
                                 Text(legacy).font(.body).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
                                 Text("旧版原文完整保留；新记录支持逐段校对与标记重点。").font(.caption).foregroundStyle(.secondary)
-                            }.padding(16).background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
+                            }.padding(16).background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10)).id("legacy")
                         }
                         ForEach(model.filteredLines) { line in
                             VStack(alignment: .leading, spacing: 8) {
                                 HStack(spacing: 9) {
-                                    Text(durationText(line.start)).monospacedDigit()
+                                    Button { model.playLine(line) } label: { Label(durationText(line.start), systemImage: "play.circle").monospacedDigit() }.buttonStyle(.plain).help("从这一段回听").disabled(!model.canReviewAudio)
                                     Text(line.source.rawValue)
                                     if line.isFinal {
                                         Menu {
@@ -432,7 +435,7 @@ struct MeetingView: View {
                                     }
                                 }.font(.caption).foregroundStyle(.secondary)
                                 Text(line.text).font(.system(size: 16)).foregroundStyle(line.isFinal ? .primary : .secondary).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
-                            }.padding(16).background(line.isImportant == true ? Color.orange.opacity(0.07) : Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
+                            }.padding(16).background((model.playback.isPlaying ? model.activePlaybackLineID : model.focusedLineID) == line.id ? accent.opacity(0.12) : line.isImportant == true ? Color.orange.opacity(0.07) : Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
                                 .contextMenu {
                                     Button("复制这一段") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(line.text, forType: .string) }
                                     if let original = line.originalText {
@@ -446,7 +449,15 @@ struct MeetingView: View {
                         }
                         Color.clear.frame(height: 1).id("bottom")
                     }.padding(24)
-                }.onChange(of: model.document.lines) { _, _ in
+                }.onAppear {
+                    if let id = model.focusedLineID { proxy.scrollTo(id, anchor: .center) }
+                    else if model.selectedMeeting?.legacyText?.contains(model.transcriptQuery) == true { proxy.scrollTo("legacy", anchor: .top) }
+                }
+                .onChange(of: model.focusedLineID) { _, id in if let id { proxy.scrollTo(id, anchor: .center) } }
+                .onChange(of: model.activePlaybackLineID) { _, id in
+                    if model.playback.followText, model.transcriptQuery.isEmpty, let id, model.filteredLines.contains(where: { $0.id == id }) { proxy.scrollTo(id, anchor: .center) }
+                }
+                .onChange(of: model.document.lines) { _, _ in
                     if model.recording && model.followLive && model.transcriptQuery.isEmpty { proxy.scrollTo("bottom", anchor: .bottom) }
                 }
             }
@@ -542,6 +553,13 @@ struct MeetingView: View {
                             .buttonStyle(.borderedProminent).tint(accent).disabled(!model.canManage)
                     }
                 }
+                Picker("纪要场景", selection: Binding(get: { model.selectedMeeting?.summaryTemplate ?? .work }, set: model.setSummaryTemplate)) {
+                    ForEach(SummaryTemplate.allCases) { Text($0.title).tag($0) }
+                }.pickerStyle(.segmented).disabled(!model.canManage)
+                Text((model.selectedMeeting?.summaryTemplate ?? .work).guidance).font(.caption).foregroundStyle(.secondary)
+                if let generated = model.selectedMeeting?.summaryGeneratedTemplate, generated != (model.selectedMeeting?.summaryTemplate ?? .work) {
+                    Text("当前纪要由“" + generated.title + "”模板生成，重新生成后应用新模板。").font(.caption).foregroundStyle(.orange)
+                }
                 if let date = model.selectedMeeting?.summaryGeneratedAt {
                     Text("生成于 " + date.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.secondary)
                 }
@@ -552,7 +570,7 @@ struct MeetingView: View {
                 Label("AI 可能遗漏或误解内容，请与原文核对。确认后的待办才会加入列表。", systemImage: "info.circle").font(.caption).foregroundStyle(.secondary)
                 if model.selectedMeeting?.summary != nil {
                     TextEditor(text: Binding(get: { model.selectedMeeting?.summary ?? "" }, set: model.setSummary)).font(.body).frame(minHeight: 240).padding(8)
-                        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8)).disabled(model.summaryGenerating)
+                        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8)).disabled(model.summaryGenerating || model.questioning)
                 } else { Text("结束转写后，点击生成。长会议会分段整理；会议内容只发送到这台 Mac 上的本地 AI 服务。").foregroundStyle(.secondary).padding(.vertical, 30) }
                 if !model.suggestedTasks.isEmpty {
                     Divider(); Text("待确认的 AI 建议").font(.headline)

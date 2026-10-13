@@ -17,7 +17,7 @@ struct MeetingTask: Identifiable, Codable {
     var done = false
 }
 
-struct MeetingAudioSegment: Identifiable, Codable {
+struct MeetingAudioSegment: Identifiable, Codable, Equatable {
     var id = UUID()
     let source: AudioSource
     let start: TimeInterval
@@ -43,6 +43,9 @@ struct MeetingRecord: Identifiable, Codable {
     var suggestedTasks: [SuggestedTask]?
     var audioSegments: [MeetingAudioSegment]?
     var speakerCountHint: Int?
+    var summaryTemplate: SummaryTemplate?
+    var summaryGeneratedTemplate: SummaryTemplate?
+    var answers: [MeetingAnswer]?
 
     var transcriptText: String {
         if let legacyText { return document.lines.isEmpty ? legacyText : legacyText + "\n\n" + document.bodyText }
@@ -60,6 +63,7 @@ struct MeetingRecord: Identifiable, Codable {
         if let tasks, !tasks.isEmpty {
             sections.append("待办事项\n" + tasks.map { "[\($0.done ? "x" : " ")] \($0.text)\($0.owner.isEmpty ? "" : " · 负责人：" + $0.owner)\($0.due.isEmpty ? "" : " · 截止：" + $0.due)" }.joined(separator: "\n"))
         }
+        if !(answers ?? []).isEmpty { sections.append("会议问答（AI 生成，请校对）\n" + questionExport) }
         return sections.joined(separator: "\n\n")
     }
 
@@ -68,6 +72,7 @@ struct MeetingRecord: Identifiable, Codable {
         if let summary, !summary.isEmpty { sections.append("## 会议纪要\n\n> AI 生成，请与原文校对。\n\n" + summary) }
         if let notes, !notes.isEmpty { sections.append("## 笔记\n\n" + notes) }
         if let tasks, !tasks.isEmpty { sections.append("## 待办\n\n" + tasks.map { "- [\($0.done ? "x" : " ")] \($0.text)\($0.owner.isEmpty ? "" : " · " + $0.owner)\($0.due.isEmpty ? "" : " · " + $0.due)" }.joined(separator: "\n")) }
+        if !(answers ?? []).isEmpty { sections.append("## 会议问答\n\n> AI 生成，请校对引用依据。\n\n" + questionExport) }
         sections.append("## 原始转写\n\n" + transcriptText)
         return sections.joined(separator: "\n\n")
     }

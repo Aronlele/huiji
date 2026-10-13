@@ -1,10 +1,11 @@
 import AppKit
+import Combine
 import AVFoundation
 import Speech
 import UniformTypeIdentifiers
 
 enum LibraryScope: String, CaseIterable { case all = "全部会议", favorites = "收藏", trash = "最近删除" }
-enum MeetingTab: String, CaseIterable { case transcript = "转写", notes = "笔记与待办", important = "重点", summary = "纪要" }
+enum MeetingTab: String, CaseIterable { case transcript = "转写", notes = "笔记与待办", important = "重点", summary = "纪要", questions = "问答" }
 enum ExportKind: String, CaseIterable { case text = "文本 TXT", markdown = "Markdown", subtitles = "字幕 SRT" }
 
 @MainActor
@@ -38,6 +39,11 @@ final class MeetingModel: ObservableObject {
     @Published var importing = false
     @Published var summaryGenerating = false
     @Published var speakersGenerating = false
+    @Published var questioning = false
+    @Published var questionText = ""
+    @Published var questionStatus = "依据本场原文与笔记回答，内容只在本机处理。"
+    @Published var focusedLineID: UUID?
+    let playback = MeetingPlayback()
     @Published var speakerStatus = "中文增强分离 · 在本机处理，可改名和逐段纠正。"
     @Published var expectedSpeakerCount = 0
     @Published var aiStatus = "正在检查本地 AI…"
@@ -45,9 +51,11 @@ final class MeetingModel: ObservableObject {
     @Published var taskText = ""
     @Published var taskOwner = ""
     @Published var taskDue = ""
+    private var playbackObservation: AnyCancellable?
     private var saveTask: Task<Void, Never>?
     private var importTask: Task<Void, Never>?
     private var summaryTask: Task<Void, Never>?
+    private var questionTask: Task<Void, Never>?
     private var speakerTask: Task<Void, Never>?
     private var archives: [AudioSource: (MeetingAudioSegment, MeetingAudioArchive)] = [:]
     private let preferences: UserDefaults?
@@ -62,6 +70,7 @@ final class MeetingModel: ObservableObject {
     private var sessionIDs: [AudioSource: UUID] = [:]
     private var microphoneTask: Task<Void, Never>?
     private let directory: URL
+    private let ai: LocalMeetingAI
     private let microphoneAccess: () async -> Bool
     private var store: MeetingStore { MeetingStore(directory: directory) }
 
@@ -70,10 +79,13 @@ final class MeetingModel: ObservableObject {
     init(directory: URL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("local.huiji.meetingtranscriber/Meetings", isDirectory: true),
          preferences: UserDefaults? = nil,
+         ai: LocalMeetingAI? = nil,
          microphoneAccess: @escaping () async -> Bool = { await AVCaptureDevice.requestAccess(for: .audio) }) {
         self.directory = directory
+        self.ai = ai ?? .shared
         self.microphoneAccess = microphoneAccess
         self.preferences = preferences
+        playbackObservation = playback.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
         if let choice = preferences?.object(forKey: "useMicrophone") as? Bool { useMicrophone = choice }
     }
 
@@ -101,6 +113,7 @@ final class MeetingModel: ObservableObject {
             meeting.textFileName = "会议_\(formatter.string(from: meeting.document.startedAt))_\(meeting.id.uuidString).txt"
             try store.save(meeting)
             meetings.insert(meeting, at: 0)
+            playback.reset(); questionText = ""; questionStatus = "依据本场原文与笔记回答，内容只在本机处理。"; focusedLineID = nil
             selectedMeetingID = meeting.id
             preferences?.set(meeting.id.uuidString, forKey: "selectedMeetingID")
             elapsed = meeting.elapsed
@@ -140,9 +153,10 @@ final class MeetingModel: ObservableObject {
 
     func selectMeeting(_ id: UUID) {
         guard !recording, !busy, !microphoneChanging, id != selectedMeetingID,
-              !summaryGenerating, !speakersGenerating, let meeting = meetings.first(where: { $0.id == id }) else { return }
+              !summaryGenerating, !speakersGenerating, !questioning, let meeting = meetings.first(where: { $0.id == id }) else { return }
         do {
             try save()
+            playback.reset(); questionText = ""; questionStatus = "依据本场原文与笔记回答，内容只在本机处理。"; focusedLineID = nil
             selectedMeetingID = id
             preferences?.set(id.uuidString, forKey: "selectedMeetingID")
             elapsed = meeting.elapsed
@@ -182,6 +196,7 @@ final class MeetingModel: ObservableObject {
 
     func start() async {
         guard !busy, !recording, modelReady, canTranscribe, let meeting = selectedMeeting else { return }
+        playback.reset()
         busy = true
         error = nil
         defer { busy = false }
@@ -386,6 +401,9 @@ final class MeetingModel: ObservableObject {
     }
 
     func shutdown() async {
+        playback.reset()
+        questionTask?.cancel()
+        await questionTask?.value
         importTask?.cancel()
         summaryTask?.cancel()
         speakerTask?.cancel()
@@ -395,7 +413,7 @@ final class MeetingModel: ObservableObject {
         if !finishing { await stop(summarize: false) }
         saveTask?.cancel()
         saveSafely()
-        LocalMeetingAI.shared.shutdown()
+        ai.shutdown()
         while finishing { try? await Task.sleep(for: .milliseconds(50)) }
     }
 
@@ -422,8 +440,8 @@ final class MeetingModel: ObservableObject {
         }.sorted { libraryScope == .trash ? ($0.deletedAt ?? .distantPast) > ($1.deletedAt ?? .distantPast) : $0.updatedAt > $1.updatedAt }
     }
     var folders: [String] { Array(Set(meetings.filter { $0.deletedAt == nil }.compactMap(\.folder).filter { !$0.isEmpty })).sorted() }
-    var canManage: Bool { !recording && !busy && !microphoneChanging && !summaryGenerating && !speakersGenerating }
-    var canTranscribe: Bool { selectedMeeting != nil && selectedMeeting?.deletedAt == nil && !summaryGenerating && !speakersGenerating }
+    var canManage: Bool { !recording && !busy && !microphoneChanging && !summaryGenerating && !speakersGenerating && !questioning }
+    var canTranscribe: Bool { selectedMeeting != nil && selectedMeeting?.deletedAt == nil && !summaryGenerating && !speakersGenerating && !questioning }
     var filteredLines: [TranscriptLine] {
         document.lines.filter { (sourceFilter == nil || $0.source == sourceFilter)
             && (transcriptQuery.isEmpty || $0.text.localizedCaseInsensitiveContains(transcriptQuery))
@@ -484,7 +502,7 @@ final class MeetingModel: ObservableObject {
         do {
             try save()
             var record = meetings[index]; record.deletedAt = Date()
-            try store.save(record); meetings[index] = record; undoDeletedID = record.id
+            try store.save(record); playback.reset(); meetings[index] = record; undoDeletedID = record.id
             status = "已移入最近删除，可撤销或恢复"
         } catch { self.error = "删除失败：\(error.localizedDescription)" }
     }
@@ -688,7 +706,7 @@ final class MeetingModel: ObservableObject {
               let id = document.addSpeaker(name: name) else { return }
         document.assignSpeaker(line.id, speakerID: id); changed()
     }
-    func checkAI() async { aiStatus = await LocalMeetingAI.shared.availability() }
+    func checkAI() async { aiStatus = await ai.availability() }
     func generateSummary() {
         guard canManage, let record = selectedMeeting, record.deletedAt == nil else { return }
         guard record.hasContent || !(record.notes ?? "").isEmpty else { error = "请先转写会议或填写笔记。"; return }
@@ -697,10 +715,10 @@ final class MeetingModel: ObservableObject {
         summaryTask = Task { [self] in
             defer { summaryGenerating = false; summaryTask = nil }
             do {
-                let result = try await LocalMeetingAI.shared.summarize(input) { [weak self] in self?.aiStatus = $0 }
+                let result = try await ai.summarize(input, template: record.summaryTemplate ?? .work) { [weak self] in self?.aiStatus = $0 }
                 try Task.checkCancellation()
                 suggestedTasks = result.tasks
-                modifySelected { $0.summary = result.formatted; $0.summaryGeneratedAt = Date(); $0.suggestedTasks = result.tasks }
+                modifySelected { $0.summary = result.formatted; $0.summaryGeneratedAt = Date(); $0.summaryGeneratedTemplate = record.summaryTemplate ?? .work; $0.suggestedTasks = result.tasks }
                 aiStatus = "已在本机生成 · 请校对纪要，确认待办后加入列表"
             } catch {
                 if Task.isCancelled { aiStatus = "已取消整理 · 原有纪要保留" }
@@ -709,6 +727,69 @@ final class MeetingModel: ObservableObject {
         }
     }
     func cancelSummary() { summaryTask?.cancel() }
+
+    var canReviewAudio: Bool { !recording && !busy && !microphoneChanging }
+    func refreshPlayback() {
+        guard canReviewAudio else { return }
+        playback.configure(selectedMeeting, store: store)
+    }
+    func playLine(_ line: TranscriptLine) {
+        guard canReviewAudio else { return }
+        focusedLineID = nil
+        refreshPlayback()
+        guard playback.sources.contains(line.source) else { error = "这一段没有保存对应的声音来源。"; return }
+        playback.pause()
+        playback.selectSource(line.source)
+        if playback.seek(line.start) { playback.play() }
+    }
+    var activePlaybackLineID: UUID? {
+        guard playback.isPlaying else { return nil }
+        return document.lines.last { $0.source == playback.source && $0.start <= playback.position && $0.end > playback.position }?.id
+    }
+    func locateCitation(_ citation: MeetingCitation) {
+        if citation.lineID == nil {
+            if citation.speaker == "会议笔记", selectedMeeting?.notes?.contains(citation.quote) == true {
+                tab = .notes; status = "已定位会议笔记 · 该引用没有录音时间"; return
+            }
+            if selectedMeeting?.legacyText?.contains(citation.quote) == true {
+                transcriptQuery = citation.quote; sourceFilter = nil; focusedLineID = nil; tab = .transcript
+                status = "已定位历史原文 · 该引用没有录音时间"; return
+            }
+        }
+        let line = document.lines.first { $0.id == citation.lineID && $0.text.contains(citation.quote) }
+            ?? document.lines.first { $0.text.contains(citation.quote) }
+        guard let line else { error = "引用来自笔记、历史原文，或原文已修改；请直接核对引用内容。"; return }
+        transcriptQuery = ""; sourceFilter = nil; focusedLineID = line.id; tab = .transcript
+        if canReviewAudio {
+            refreshPlayback(); playback.pause()
+            if playback.sources.contains(line.source) { playback.selectSource(line.source); playback.seek(line.start) }
+        }
+    }
+    func setSummaryTemplate(_ value: SummaryTemplate) {
+        guard canManage else { return }
+        modifySelected { $0.summaryTemplate = value }
+    }
+    func askQuestion() {
+        guard canManage, let record = selectedMeeting, record.deletedAt == nil else { return }
+        let question = questionText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !question.isEmpty, question.count <= 500 else { error = "请输入 1–500 字的问题。"; return }
+        saveSafely(); questioning = true; error = nil
+        questionTask = Task { [self] in
+            defer { questioning = false; questionTask = nil }
+            do {
+                let result = try await ai.answer(question, record: record) { [weak self] in self?.questionStatus = $0 }
+                try Task.checkCancellation()
+                guard selectedMeetingID == record.id else { return }
+                modifySelected { if $0.answers == nil { $0.answers = [] }; $0.answers!.append(result) }
+                questionText = ""; questionStatus = "回答已保存在本场会议 · 点击引用定位原文"
+            } catch {
+                if Task.isCancelled { questionStatus = "已取消问答 · 已保存的回答保留" }
+                else { self.error = error.localizedDescription; questionStatus = "问答未完成，可重试" }
+            }
+        }
+    }
+    func cancelQuestion() { questionTask?.cancel() }
+    func removeAnswer(_ id: UUID) { guard canManage else { return }; modifySelected { $0.answers?.removeAll { $0.id == id } } }
 
     func showRecords() {
         do {
