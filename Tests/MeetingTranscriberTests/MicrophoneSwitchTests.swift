@@ -305,5 +305,41 @@ struct MicrophoneSwitchTests {
         archiveReload.selectMeeting(archiveModel.selectedMeetingID!)
         precondition(archiveReload.expectedSpeakerCount == 2)
         print("PASS: 结束安排会后分离（含先暂停再结束）、取消保留原文、人数异常输入不修改及重启保持")
+        let testAI = LocalMeetingAI(responseGenerator: { _, _ in
+            try await Task.sleep(for: .milliseconds(80))
+            return "{\"answer\":\"本机保存。\",\"citations\":[{\"id\":\"E1\",\"quote\":\"记录在本机保存。\"}]}"
+        })
+        let qaDirectory = directory.appendingPathComponent("qa-tests")
+        let qaModel = MeetingModel(directory: qaDirectory, ai: testAI, microphoneAccess: { true })
+        qaModel.createMeeting(title: "问答隔离一")
+        qaModel.document.update(source: .system, start: 0, end: 1, text: "记录在本机保存。", isFinal: true)
+        qaModel.saveSafely()
+        let qaFirstID = qaModel.selectedMeetingID!
+        qaModel.createMeeting(title: "问答隔离二")
+        let qaSecondID = qaModel.selectedMeetingID!
+        qaModel.selectMeeting(qaFirstID)
+        qaModel.questionText = "在哪里保存？"; qaModel.askQuestion()
+        precondition(qaModel.questioning && !qaModel.canManage && !qaModel.canTranscribe)
+        qaModel.selectMeeting(qaSecondID); precondition(qaModel.selectedMeetingID == qaFirstID)
+        await waitUntil { !qaModel.questioning }
+        precondition(qaModel.selectedMeeting!.answers!.count == 1)
+        qaModel.questionText = "在哪里保存？"; qaModel.askQuestion(); qaModel.cancelQuestion()
+        await waitUntil { !qaModel.questioning }
+        precondition(qaModel.selectedMeeting!.answers!.count == 1)
+        let reference = qaModel.selectedMeeting!.answers![0].citations[0]
+        qaModel.tab = .questions; qaModel.transcriptQuery = "不存在"; qaModel.sourceFilter = .microphone
+        qaModel.locateCitation(reference)
+        precondition(qaModel.tab == .transcript && qaModel.focusedLineID == qaModel.document.lines[0].id && qaModel.transcriptQuery.isEmpty && qaModel.sourceFilter == nil)
+        qaModel.setNotes("验收方法：人工核对中文。")
+        qaModel.locateCitation(MeetingCitation(lineID: nil, quote: "人工核对中文。", start: nil, source: nil, speaker: "会议笔记"))
+        precondition(qaModel.tab == .notes)
+        let qaReload = MeetingModel(directory: qaDirectory, ai: testAI)
+        qaReload.loadMeetings(); qaReload.selectMeeting(qaFirstID)
+        precondition(qaReload.selectedMeeting?.answers?.count == 1)
+        qaModel.selectMeeting(qaSecondID); precondition(qaModel.selectedMeeting!.answers == nil)
+        qaModel.selectMeeting(qaFirstID); qaModel.removeAnswer(qaModel.selectedMeeting!.answers![0].id)
+        precondition(qaModel.selectedMeeting!.answers!.isEmpty)
+        print("PASS: 原文问答保存、取消不追加、会议隔离、处理期禁切换和录制、引用定位清筛选、重启和删除问答")
+
     }
 }
