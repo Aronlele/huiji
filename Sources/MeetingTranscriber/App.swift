@@ -68,7 +68,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             await model.checkModel()
             await environment.check()
             await model.checkAI()
-            if !environment.allReady, !UserDefaults.standard.bool(forKey: "environmentGuideShown") {
+            if !UserDefaults.standard.bool(forKey: "environmentGuideShown") {
                 UserDefaults.standard.set(true, forKey: "environmentGuideShown")
                 environment.isPresented = true
             }
